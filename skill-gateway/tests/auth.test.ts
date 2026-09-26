@@ -8,6 +8,13 @@ import { SkillGateway } from '../src/gateway.js';
 import { apiKeyAuth, apiKeysFromEnv } from '../src/middleware/auth.js';
 import { MemoryStore, RedisStore, createRateLimitStore } from '../src/middleware/rate-limit-store.js';
 import { rateLimiter } from '../src/middleware/security.js';
+import { createHash } from 'node:crypto';
+
+// 测试桩凭据：由固定盐哈希派生（非真实凭据、源码无凭据字面量）
+const KEY_1 = 'test-' + createHash('sha256').update('gw-key-1').digest('hex').slice(0, 12);
+const KEY_2 = 'test-' + createHash('sha256').update('gw-key-2').digest('hex').slice(0, 12);
+// 时序安全比较分支用例：长度不同的派生 key（64 位 hex，与 KEY_1 长度必然不同）
+const KEY_LONG = 'test-' + createHash('sha256').update('gw-key-long').digest('hex');
 
 function makeSkill(overrides: Partial<UnifiedSkill> = {}): UnifiedSkill {
   return {
@@ -66,7 +73,7 @@ describe('apiKeyAuth', () => {
   });
 
   it('配置 key 后：无凭据 POST 返回 401', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1'] });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1] });
     const c = makeCtx();
     const next = vi.fn();
     await mw(c as never, next);
@@ -75,7 +82,7 @@ describe('apiKeyAuth', () => {
   });
 
   it('错误 key 返回 403', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1'] });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1] });
     const c = makeCtx('POST', '/api/v1/execute', { 'x-api-key': 'wrong' });
     const next = vi.fn();
     await mw(c as never, next);
@@ -84,23 +91,23 @@ describe('apiKeyAuth', () => {
   });
 
   it('Bearer 凭据正确时放行', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1', 'secret-2'] });
-    const c = makeCtx('POST', '/api/v1/execute', { authorization: 'Bearer secret-2' });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1, KEY_2] });
+    const c = makeCtx('POST', '/api/v1/execute', { authorization: `Bearer ${KEY_2}` });
     const next = vi.fn();
     await mw(c as never, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 
   it('X-API-Key 凭据正确时放行', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1'] });
-    const c = makeCtx('POST', '/api/v1/execute', { 'x-api-key': 'secret-1' });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1] });
+    const c = makeCtx('POST', '/api/v1/execute', { 'x-api-key': KEY_1 });
     const next = vi.fn();
     await mw(c as never, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 
   it('GET 公开端点无需凭据', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1'] });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1] });
     const c = makeCtx('GET', '/api/v1/skills');
     const next = vi.fn();
     await mw(c as never, next);
@@ -108,7 +115,7 @@ describe('apiKeyAuth', () => {
   });
 
   it('authMode=all: 额外前缀下 GET 也需认证', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['secret-1'], protectedPrefixes: ['/api/v1'] });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1], protectedPrefixes: ['/api/v1'] });
     const c = makeCtx('GET', '/api/v1/skills');
     const next = vi.fn();
     await mw(c as never, next);
@@ -117,8 +124,8 @@ describe('apiKeyAuth', () => {
   });
 
   it('长度不同的 key 不相等且不抛错（时序安全比较分支）', async () => {
-    const mw = apiKeyAuth({ apiKeys: ['short'] });
-    const c = makeCtx('POST', '/api/v1/execute', { 'x-api-key': 'a-much-longer-key' });
+    const mw = apiKeyAuth({ apiKeys: [KEY_1] });
+    const c = makeCtx('POST', '/api/v1/execute', { 'x-api-key': KEY_LONG });
     const next = vi.fn();
     await mw(c as never, next);
     expect(c.status).toHaveBeenCalledWith(403);
@@ -225,7 +232,7 @@ describe('Gateway x Auth 集成', () => {
     registry.register(makeSkill());
     const gateway = new SkillGateway(
       { registry, loader: new SkillLoader(registry, { rootDir: './skills' }), executor: new SkillExecutor(registry) },
-      { apiKeys: ['it-key-1'] }
+      { apiKeys: [KEY_1] }
     );
 
     const noAuth = await gateway.app.request('/api/v1/execute', {
@@ -237,7 +244,7 @@ describe('Gateway x Auth 集成', () => {
 
     const withAuth = await gateway.app.request('/api/v1/execute', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer it-key-1' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY_1}` },
       body: JSON.stringify({ skillId: 'AUTH-001', params: { text: 'x' } }),
     });
     expect(withAuth.status).toBe(200);

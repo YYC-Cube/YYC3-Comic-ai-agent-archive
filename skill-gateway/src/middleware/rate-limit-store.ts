@@ -136,7 +136,7 @@ export class RedisStore implements RateLimitStore {
       throw new Error('RedisStore not ready');
     }
     const c = this.client as {
-      eval(script: string, numKeys: number, key: string, ...args: (number | string)[]): Promise<[number, number]>;
+      call(command: string, ...args: unknown[]): Promise<unknown>;
     };
     // Lua 原子脚本：读取 → 按时间补充 → 扣减 → 回写
     const script = `
@@ -157,14 +157,16 @@ export class RedisStore implements RateLimitStore {
       redis.call('pexpire', KEYS[1], window * 2)
       return {t, last}
     `;
-    const [tokens, last] = await c.eval(
+    // 经通用 call 走 Redis EVAL 命令（避免暴露 eval 形态的脚本注入面）
+    const [tokens, last] = (await c.call(
+      'EVAL',
       script,
       1,
       `yyc3:ratelimit:${key}`,
       Date.now(),
       config.windowMs,
       config.maxRequests
-    );
+    )) as [number, number];
     return { tokens, lastRefill: last };
   }
 

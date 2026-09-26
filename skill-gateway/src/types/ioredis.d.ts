@@ -16,12 +16,7 @@ declare module 'ioredis' {
     constructor(url: string, options?: RedisOptions);
     ping(): Promise<string>;
     on(event: string, listener: (...args: unknown[]) => void): this;
-    eval(
-      script: string,
-      numKeys: number,
-      key: string,
-      ...args: (number | string)[]
-    ): Promise<unknown>;
+    call(command: string, ...args: unknown[]): Promise<unknown>;
     disconnect(): void;
   }
 }

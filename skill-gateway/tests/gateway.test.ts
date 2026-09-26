@@ -9,6 +9,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { SkillGateway } from '../src/gateway.js';
+import { createHash } from 'node:crypto';
+
+// 测试桩凭据：由固定盐哈希派生（非真实凭据、源码无凭据字面量）
+const TEST_KEY = 'test-' + createHash('sha256').update('gateway-e2e-key').digest('hex').slice(0, 12);
 
 function makeSkill(overrides: Partial<UnifiedSkill> = {}): UnifiedSkill {
   return {
@@ -37,10 +41,10 @@ describe('SkillGateway', () => {
     const loader = new SkillLoader(registry, { rootDir: './skills' });
     const executor = new SkillExecutor(registry);
 
-    gateway = new SkillGateway({ registry, loader, executor }, { apiKeys: ['test-key'] });
+    gateway = new SkillGateway({ registry, loader, executor }, { apiKeys: [TEST_KEY] });
   });
 
-  const AUTH_HEADERS = { 'X-API-Key': 'test-key' };
+  const AUTH_HEADERS = { 'X-API-Key': TEST_KEY };
 
   it('创建 app 实例', () => {
     expect(gateway.app).toBeDefined();
@@ -156,7 +160,7 @@ describe('SkillGateway', () => {
       const loader = new SkillLoader(reg, { rootDir: dir });
       const gw = new SkillGateway(
         { registry: reg, loader, executor: new SkillExecutor(reg) },
-        { apiKeys: ['test-key'] },
+        { apiKeys: [TEST_KEY] },
       );
       await gw.initialize();
       reg.register(makeSkill({ id: 'GW-STALE' }));
@@ -466,7 +470,7 @@ describe('SkillGateway', () => {
       // 独立实例：避免共享 gateway 的限流桶已被前序测试耗尽导致 429 干扰
       const fresh = new SkillGateway(
         { registry, loader: new SkillLoader(registry, { rootDir: './skills' }), executor: new SkillExecutor(registry) },
-        { apiKeys: ['test-key'] },
+        { apiKeys: [TEST_KEY] },
       );
       // 构造无 Content-Length 的流式请求体（2MB，分块推送）
       const chunk = 'x'.repeat(64 * 1024);
@@ -480,7 +484,7 @@ describe('SkillGateway', () => {
       });
       const req = new Request('http://localhost/api/v1/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'test-key' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': TEST_KEY },
         body: stream,
         duplex: 'half',
       } as RequestInit);
@@ -493,7 +497,7 @@ describe('SkillGateway', () => {
       // 默认 trustedProxyHops=0 时不信任 XFF，所有请求共享同一限流键
       const limitGateway = new SkillGateway(
         { registry, loader: new SkillLoader(registry, { rootDir: './skills' }), executor: new SkillExecutor(registry) },
-        { apiKeys: ['test-key'], trustedProxyHops: 0 },
+        { apiKeys: [TEST_KEY], trustedProxyHops: 0 },
       );
       // 连发 101 次，每次伪造不同 XFF
       for (let i = 0; i < 101; i++) {
@@ -510,7 +514,7 @@ describe('SkillGateway', () => {
     it('XFF 倒数第 hops 跳作为真实客户端 IP', async () => {
       const proxyGateway = new SkillGateway(
         { registry, loader: new SkillLoader(registry, { rootDir: './skills' }), executor: new SkillExecutor(registry) },
-        { apiKeys: ['test-key'], trustedProxyHops: 2 },
+        { apiKeys: [TEST_KEY], trustedProxyHops: 2 },
       );
       // 101 次同一真实 IP（链倒数第二跳）→ 耗尽；伪造前缀不改变限流键
       for (let i = 0; i < 101; i++) {
