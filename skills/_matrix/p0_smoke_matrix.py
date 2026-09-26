@@ -267,8 +267,9 @@ def run_matrix(verbose=True):
                   else "FAIL", "溯源维度字段在位")),
         ("03-格物宗师", "storyboard-schema-check", _check_storyboard_schema),
         ("04-创想灵韵", "ip-design",
-         lambda: ("PASS" if chuangxiang.brainstorm_ideas("古风漫剧IP人设") else "FAIL",
-                  "三路径创意产出非空")),
+         lambda: ("PASS" if isinstance(chuangxiang.brainstorm_ideas("古风漫剧IP人设"), list)
+                  and chuangxiang.brainstorm_ideas("古风漫剧IP人设")
+                  else "FAIL", "三路径创意产出为结构化列表")),
         ("05-言启千行", "intent-routing",
          lambda: ("PASS" if yanqi.run("分析本季度经营数据")["intent"] == "data_analysis"
                   else "FAIL", "规则路由命中 data_analysis + trace_id 生成")),

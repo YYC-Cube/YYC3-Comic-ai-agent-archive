@@ -22,7 +22,7 @@ IP 人设/画风/世界观创意（Character DNA 字典锚点）
 ## 输出契约
 | 字段 | 类型 | 说明 |
 | ---- | ---- | ---- |
-| ideas | str | 保守/创新/跨界三路径方案 |
+| ideas | list | 三路径创意数组，元素含 name/idea/highlight/expectation |
 
 ## 依赖
 components：04-创想灵韵/chuangxiang_lingyun_agent.py 的 brainstorm_ideas
