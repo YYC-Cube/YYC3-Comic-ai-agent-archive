@@ -81,3 +81,6 @@ storage/logs/*
 .coverage
 htmlcov/
 coverage/
+
+# ── 工具状态目录（不入仓库）──
+.mimosa/
